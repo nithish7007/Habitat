@@ -1,0 +1,295 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated Life OS user profile and regional metadata",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "timezone": { "type": "string", "description": "Preferred IANA timezone such as Asia/Kolkata" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp set via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp set via FieldValue.serverTimestamp()" }
+      },
+      "required": ["userId", "displayName", "timezone", "createdAt", "updatedAt"]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "Customizable dashboard widgets, theme posture, productivity score weights, and daily targets",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "enabledWidgets": { "type": "array", "description": "Ordered list of enabled DashboardWidgetType keys" },
+        "themeMode": { "type": "string", "enum": ["SYSTEM", "DARK", "LIGHT"] },
+        "weightTasks": { "type": "integer" },
+        "weightHabits": { "type": "integer" },
+        "weightChallenges": { "type": "integer" },
+        "weightWater": { "type": "integer" },
+        "weightSteps": { "type": "integer" },
+        "waterTargetMl": { "type": "integer" },
+        "stepsTarget": { "type": "integer" },
+        "focusTargetMinutes": { "type": "integer" },
+        "quietHoursStart": { "type": "integer" },
+        "quietHoursEnd": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "enabledWidgets", "themeMode",
+        "weightTasks", "weightHabits", "weightChallenges", "weightWater", "weightSteps",
+        "waterTargetMl", "stepsTarget", "focusTargetMinutes", "createdAt", "updatedAt"
+      ]
+    },
+    "TaskItem": {
+      "title": "TaskItem",
+      "description": "User task with priority, status, scheduling time block, category, and recurrence",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "priority": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+        "status": { "type": "string", "enum": ["PENDING", "IN_PROGRESS", "COMPLETED"] },
+        "dueDateIso": { "type": "string" },
+        "dueTimeText": { "type": "string" },
+        "category": { "type": "string" },
+        "labelsCsv": { "type": "string" },
+        "recurrence": { "type": "string", "enum": ["NONE", "DAILY", "WEEKLY", "MONTHLY"] },
+        "timeBlockStart": { "type": "string" },
+        "timeBlockEnd": { "type": "string" },
+        "completedDateIso": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "priority", "status", "dueDateIso", "category", "recurrence", "createdAt", "updatedAt"]
+    },
+    "HabitItem": {
+      "title": "HabitItem",
+      "description": "Recurring custom habit with weekday bitmask and schedule dates",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "scheduleType": { "type": "string", "enum": ["DAILY", "WEEKLY"] },
+        "weekdaysMask": { "type": "integer" },
+        "startDateIso": { "type": "string" },
+        "endDateIso": { "type": "string" },
+        "reminderTime": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "scheduleType", "weekdaysMask", "startDateIso", "createdAt", "updatedAt"]
+    },
+    "HabitLog": {
+      "title": "HabitLog",
+      "description": "Daily completion log for a habit on an Asia/Kolkata ISO date",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "habitId": { "type": "string" },
+        "dateIso": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "habitId", "dateIso", "completed", "createdAt", "updatedAt"]
+    },
+    "ChallengeItem": {
+      "title": "ChallengeItem",
+      "description": "Date-bounded strict accountability challenge",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "startDateIso": { "type": "string" },
+        "endDateIso": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "startDateIso", "endDateIso", "createdAt", "updatedAt"]
+    },
+    "ChallengeLog": {
+      "title": "ChallengeLog",
+      "description": "Daily status record with audit history for a challenge",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "challengeId": { "type": "string" },
+        "dateIso": { "type": "string" },
+        "status": { "type": "string", "enum": ["SUCCESS", "FAILED", "NOT_RECORDED"] },
+        "auditHistory": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "challengeId", "dateIso", "status", "createdAt", "updatedAt"]
+    },
+    "NoteItem": {
+      "title": "NoteItem",
+      "description": "Rich note with multiple labels, pin/archive state, and optional attachment URI",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "labelsCsv": { "type": "string" },
+        "pinned": { "type": "boolean" },
+        "archived": { "type": "boolean" },
+        "attachmentUri": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "content", "pinned", "archived", "createdAt", "updatedAt"]
+    },
+    "RoutineItem": {
+      "title": "RoutineItem",
+      "description": "Structured daily routine with ordered steps",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "routineType": { "type": "string", "enum": ["MORNING", "STUDY", "EXERCISE", "SLEEP", "CUSTOM"] },
+        "stepsCsv": { "type": "string" },
+        "recurrence": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "routineType", "stepsCsv", "recurrence", "createdAt", "updatedAt"]
+    },
+    "RoutineLog": {
+      "title": "RoutineLog",
+      "description": "Daily completed steps log for a routine",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "routineId": { "type": "string" },
+        "dateIso": { "type": "string" },
+        "completedStepsCsv": { "type": "string" },
+        "completedAll": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "routineId", "dateIso", "completedStepsCsv", "completedAll", "createdAt", "updatedAt"]
+    },
+    "GoalItem": {
+      "title": "GoalItem",
+      "description": "Multi-horizon goal with milestones, priority, and lifecycle status",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "horizon": { "type": "string" },
+        "priority": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "PAUSED", "COMPLETED", "FAILED"] },
+        "targetDateIso": { "type": "string" },
+        "progressPercent": { "type": "integer" },
+        "milestonesCsv": { "type": "string" },
+        "completedMilestonesCsv": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "horizon", "priority", "status", "targetDateIso", "progressPercent", "createdAt", "updatedAt"]
+    },
+    "JournalEntry": {
+      "title": "JournalEntry",
+      "description": "Structured daily reflection and gratitude journal entry",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dateIso": { "type": "string" },
+        "highlights": { "type": "string" },
+        "learned": { "type": "string" },
+        "wentWell": { "type": "string" },
+        "wentWrong": { "type": "string" },
+        "tomorrowPlan": { "type": "string" },
+        "gratitude": { "type": "string" },
+        "mood": { "type": "string" },
+        "privateEntry": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dateIso", "privateEntry", "createdAt", "updatedAt"]
+    },
+    "FocusSession": {
+      "title": "FocusSession",
+      "description": "Completed Focus Studio work/study session",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dateIso": { "type": "string" },
+        "mode": { "type": "string", "enum": ["POMODORO", "CUSTOM", "STOPWATCH", "COUNTDOWN"] },
+        "category": { "type": "string" },
+        "plannedMinutes": { "type": "integer" },
+        "actualSeconds": { "type": "integer" },
+        "distractionsCount": { "type": "integer" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dateIso", "mode", "category", "plannedMinutes", "actualSeconds", "distractionsCount", "createdAt", "updatedAt"]
+    },
+    "WaterLog": {
+      "title": "WaterLog",
+      "description": "Hydration log record in milliliters",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dateIso": { "type": "string" },
+        "amountMl": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dateIso", "amountMl", "createdAt", "updatedAt"]
+    },
+    "StepLog": {
+      "title": "StepLog",
+      "description": "Daily step count record from Health Connect or manual entry",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dateIso": { "type": "string" },
+        "steps": { "type": "integer" },
+        "source": { "type": "string", "enum": ["MANUAL", "HEALTH_CONNECT"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dateIso", "steps", "source", "createdAt", "updatedAt"]
+    },
+    "ReminderItem": {
+      "title": "ReminderItem",
+      "description": "Smart reminder scheduled with WorkManager",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "moduleType": { "type": "string" },
+        "scheduledEpochMs": { "type": "integer" },
+        "recurrence": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "moduleType", "scheduledEpochMs", "recurrence", "enabled", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": { "$ref": "#/entities/UserProfile" }, "description": "User profile isolated by Firebase UID" },
+    "/users/{userId}/userPreferences/{prefId}": { "schema": { "$ref": "#/entities/UserPreferences" }, "description": "Dashboard widgets layout and user preferences" },
+    "/users/{userId}/tasks/{taskId}": { "schema": { "$ref": "#/entities/TaskItem" }, "description": "User tasks and daily planner blocks" },
+    "/users/{userId}/habits/{habitId}": { "schema": { "$ref": "#/entities/HabitItem" }, "description": "User custom habits" },
+    "/users/{userId}/habitLogs/{logId}": { "schema": { "$ref": "#/entities/HabitLog" }, "description": "Daily habit completion logs" },
+    "/users/{userId}/challenges/{challengeId}": { "schema": { "$ref": "#/entities/ChallengeItem" }, "description": "User strict challenges" },
+    "/users/{userId}/challengeLogs/{logId}": { "schema": { "$ref": "#/entities/ChallengeLog" }, "description": "Daily challenge outcomes and edit audit trails" },
+    "/users/{userId}/notes/{noteId}": { "schema": { "$ref": "#/entities/NoteItem" }, "description": "User notes and labels" },
+    "/users/{userId}/routines/{routineId}": { "schema": { "$ref": "#/entities/RoutineItem" }, "description": "User routines" },
+    "/users/{userId}/routineLogs/{logId}": { "schema": { "$ref": "#/entities/RoutineLog" }, "description": "Daily routine completion logs" },
+    "/users/{userId}/goals/{goalId}": { "schema": { "$ref": "#/entities/GoalItem" }, "description": "Multi-horizon user goals" },
+    "/users/{userId}/journalEntries/{entryId}": { "schema": { "$ref": "#/entities/JournalEntry" }, "description": "Daily life journal entries" },
+    "/users/{userId}/focusSessions/{sessionId}": { "schema": { "$ref": "#/entities/FocusSession" }, "description": "Focus Studio session records" },
+    "/users/{userId}/waterLogs/{logId}": { "schema": { "$ref": "#/entities/WaterLog" }, "description": "Water intake logs" },
+    "/users/{userId}/stepLogs/{logId}": { "schema": { "$ref": "#/entities/StepLog" }, "description": "Step count records" },
+    "/users/{userId}/reminders/{reminderId}": { "schema": { "$ref": "#/entities/ReminderItem" }, "description": "Smart reminders" }
+  }
+}

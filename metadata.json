@@ -1,0 +1,6 @@
+{
+  "name": "Life OS",
+  "description": "Personal Life Management Android app with customizable dashboard widgets, tasks, habits, challenges, notes, routines, goals, journal, focus studio, water & steps tracking, reminders, and insights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

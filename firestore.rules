@@ -1,0 +1,874 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isOptionalString(data, key, maxLen) {
+      return !(key in data) || data[key] == null || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isNumber(v) {
+      return v is int || v is float;
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.timezone is string && data.timezone.size() >= 1 && data.timezone.size() <= 64 &&
+        isOptionalString(data, 'email', 200) &&
+        isOptionalString(data, 'username', 50) &&
+        isOptionalString(data, 'bio', 240) &&
+        (!('initialBalance' in data) || (isNumber(data.initialBalance) && data.initialBalance >= -10000000 && data.initialBalance <= 100000000)) &&
+        (!('monthlyBudget' in data) || (isNumber(data.monthlyBudget) && data.monthlyBudget >= 0 && data.monthlyBudget <= 100000000)) &&
+        (!('dailySpendLimit' in data) || (isNumber(data.dailySpendLimit) && data.dailySpendLimit >= 0 && data.dailySpendLimit <= 10000000)) &&
+        (!('proteinTargetG' in data) || (data.proteinTargetG is int && data.proteinTargetG >= 10 && data.proteinTargetG <= 500)) &&
+        (!('calorieTargetKcal' in data) || (data.calorieTargetKcal is int && data.calorieTargetKcal >= 800 && data.calorieTargetKcal <= 10000)) &&
+        (!('streakFreezesAvailable' in data) || (data.streakFreezesAvailable is int && data.streakFreezesAvailable >= 0 && data.streakFreezesAvailable <= 10));
+    }
+
+    function isValidUserPreferences(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.enabledWidgets is list && data.enabledWidgets.size() <= 20 &&
+        (data.enabledWidgets.size() == 0 || data.enabledWidgets[0] is string) &&
+        data.themeMode in ['SYSTEM', 'DARK', 'LIGHT'] &&
+        data.weightTasks is int && data.weightTasks >= 0 && data.weightTasks <= 100 &&
+        data.weightHabits is int && data.weightHabits >= 0 && data.weightHabits <= 100 &&
+        data.weightChallenges is int && data.weightChallenges >= 0 && data.weightChallenges <= 100 &&
+        data.weightWater is int && data.weightWater >= 0 && data.weightWater <= 100 &&
+        data.weightSteps is int && data.weightSteps >= 0 && data.weightSteps <= 100 &&
+        data.waterTargetMl is int && data.waterTargetMl >= 250 && data.waterTargetMl <= 20000 &&
+        data.stepsTarget is int && data.stepsTarget >= 500 && data.stepsTarget <= 100000 &&
+        data.focusTargetMinutes is int && data.focusTargetMinutes >= 5 && data.focusTargetMinutes <= 960 &&
+        (!('quietHoursStart' in data) || (data.quietHoursStart is int && data.quietHoursStart >= 0 && data.quietHoursStart <= 23)) &&
+        (!('quietHoursEnd' in data) || (data.quietHoursEnd is int && data.quietHoursEnd >= 0 && data.quietHoursEnd <= 23));
+    }
+
+    function isValidTask(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.priority in ['HIGH', 'MEDIUM', 'LOW'] &&
+        data.status in ['PENDING', 'IN_PROGRESS', 'COMPLETED'] &&
+        data.dueDateIso is string && data.dueDateIso.size() <= 20 &&
+        data.category is string && data.category.size() <= 60 &&
+        data.recurrence in ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'] &&
+        isOptionalString(data, 'description', 2000) &&
+        isOptionalString(data, 'dueTimeText', 20) &&
+        isOptionalString(data, 'labelsCsv', 300) &&
+        isOptionalString(data, 'timeBlockStart', 20) &&
+        isOptionalString(data, 'timeBlockEnd', 20) &&
+        isOptionalString(data, 'completedDateIso', 20);
+    }
+
+    function isValidHabit(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 150 &&
+        data.scheduleType in ['DAILY', 'WEEKLY'] &&
+        data.weekdaysMask is int && data.weekdaysMask >= 1 && data.weekdaysMask <= 127 &&
+        data.startDateIso is string && data.startDateIso.size() <= 20 &&
+        isOptionalString(data, 'endDateIso', 20) &&
+        isOptionalString(data, 'reminderTime', 20) &&
+        (!('targetValue' in data) || (data.targetValue is int && data.targetValue >= 1 && data.targetValue <= 200000)) &&
+        isOptionalString(data, 'unit', 30) &&
+        (!('autoSource' in data) || data.autoSource in ['NONE', 'STEPS', 'WATER', 'FOCUS_MINUTES']);
+    }
+
+    function isValidHabitLog(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.habitId is string && data.habitId.size() >= 1 && data.habitId.size() <= 128 &&
+        data.dateIso is string && data.dateIso.size() == 10 &&
+        data.completed is bool &&
+        (!('progressValue' in data) || (data.progressValue is int && data.progressValue >= 0 && data.progressValue <= 200000));
+    }
+
+    function isValidChallenge(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.startDateIso is string && data.startDateIso.size() == 10 &&
+        data.endDateIso is string && data.endDateIso.size() == 10 &&
+        isOptionalString(data, 'description', 1000);
+    }
+
+    function isValidChallengeLog(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.challengeId is string && data.challengeId.size() >= 1 && data.challengeId.size() <= 128 &&
+        data.dateIso is string && data.dateIso.size() == 10 &&
+        data.status in ['SUCCESS', 'FAILED', 'NOT_RECORDED'] &&
+        isOptionalString(data, 'auditHistory', 4000);
+    }
+
+    function isValidNote(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() <= 200 &&
+        data.content is string && data.content.size() <= 20000 &&
+        data.pinned is bool &&
+        data.archived is bool &&
+        isOptionalString(data, 'labelsCsv', 300) &&
+        isOptionalString(data, 'folder', 60) &&
+        (!('favorite' in data) || data.favorite is bool) &&
+        (!('isCodeNote' in data) || data.isCodeNote is bool) &&
+        isOptionalString(data, 'attachmentUri', 1000);
+    }
+
+    function isValidRoutine(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+        data.routineType in ['MORNING', 'STUDY', 'EXERCISE', 'SLEEP', 'CUSTOM'] &&
+        data.stepsCsv is string && data.stepsCsv.size() <= 4000 &&
+        data.recurrence is string && data.recurrence.size() <= 40;
+    }
+
+    function isValidRoutineLog(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.routineId is string && data.routineId.size() >= 1 && data.routineId.size() <= 128 &&
+        data.dateIso is string && data.dateIso.size() == 10 &&
+        data.completedStepsCsv is string && data.completedStepsCsv.size() <= 4000 &&
+        data.completedAll is bool;
+    }
+
+    function isValidGoal(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 180 &&
+        data.horizon is string && data.horizon.size() >= 1 && data.horizon.size() <= 30 &&
+        data.priority in ['HIGH', 'MEDIUM', 'LOW'] &&
+        data.status in ['ACTIVE', 'PAUSED', 'COMPLETED', 'FAILED'] &&
+        data.targetDateIso is string && data.targetDateIso.size() <= 20 &&
+        data.progressPercent is int && data.progressPercent >= 0 && data.progressPercent <= 100 &&
+        isOptionalString(data, 'description', 2000) &&
+        isOptionalString(data, 'milestonesCsv', 4000) &&
+        isOptionalString(data, 'completedMilestonesCsv', 4000);
+    }
+
+    function isValidJournalEntry(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.dateIso is string && data.dateIso.size() == 10 &&
+        data.privateEntry is bool &&
+        isOptionalString(data, 'highlights', 3000) &&
+        isOptionalString(data, 'learned', 3000) &&
+        isOptionalString(data, 'wentWell', 3000) &&
+        isOptionalString(data, 'wentWrong', 3000) &&
+        isOptionalString(data, 'tomorrowPlan', 3000) &&
+        isOptionalString(data, 'gratitude', 3000) &&
+        isOptionalString(data, 'mood', 40);
+    }
+
+    function isValidFocusSession(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.dateIso is string && data.dateIso.size() == 10 &&
+        data.mode in ['POMODORO', 'CUSTOM', 'STOPWATCH', 'COUNTDOWN'] &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+        data.plannedMinutes is int && data.plannedMinutes >= 0 && data.plannedMinutes <= 600 &&
+        data.actualSeconds is int && data.actualSeconds >= 0 && data.actualSeconds <= 43200 &&
+        data.distractionsCount is int && data.distractionsCount >= 0 && data.distractionsCount <= 500 &&
+        isOptionalString(data, 'notes', 2000);
+    }
+
+    function isValidWaterLog(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.dateIso is string && data.dateIso.size() == 10 &&
+        data.amountMl is int && data.amountMl >= 10 && data.amountMl <= 5000;
+    }
+
+    function isValidStepLog(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.dateIso is string && data.dateIso.size() == 10 &&
+        data.steps is int && data.steps >= 0 && data.steps <= 200000 &&
+        data.source in ['MANUAL', 'HEALTH_CONNECT', 'STEP_SENSOR'];
+    }
+
+    function isValidReminder(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.moduleType is string && data.moduleType.size() >= 1 && data.moduleType.size() <= 40 &&
+        data.scheduledEpochMs is int && data.scheduledEpochMs >= 0 &&
+        data.recurrence is string && data.recurrence.size() <= 30 &&
+        data.enabled is bool;
+    }
+
+    function isValidTransaction(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.type in ['INCOME', 'EXPENSE'] &&
+        isNumber(data.amount) && data.amount > 0 && data.amount <= 100000000 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+        data.dateIso is string && data.dateIso.size() == 10 &&
+        isOptionalString(data, 'note', 240) &&
+        isOptionalString(data, 'locationTag', 120);
+    }
+
+    function isValidSavingsGoal(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        isNumber(data.targetAmount) && data.targetAmount >= 1 && data.targetAmount <= 100000000 &&
+        isNumber(data.savedAmount) && data.savedAmount >= 0 && data.savedAmount <= 100000000 &&
+        data.targetDateIso is string && data.targetDateIso.size() <= 10;
+    }
+
+    function isValidNutritionEntry(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.dateIso is string && data.dateIso.size() == 10 &&
+        data.mealType in ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'] &&
+        data.foodName is string && data.foodName.size() >= 1 && data.foodName.size() <= 140 &&
+        data.quantityLabel is string && data.quantityLabel.size() >= 1 && data.quantityLabel.size() <= 60 &&
+        isNumber(data.proteinG) && data.proteinG >= 0 && data.proteinG <= 500 &&
+        data.calories is int && data.calories >= 0 && data.calories <= 10000 &&
+        isNumber(data.carbsG) && data.carbsG >= 0 && data.carbsG <= 1000 &&
+        isNumber(data.fatG) && data.fatG >= 0 && data.fatG <= 500 &&
+        data.isEstimated is bool;
+    }
+
+    function isValidLearningTopic(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 80 &&
+        data.level in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'] &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.completed is bool &&
+        data.saved is bool &&
+        data.studyMinutes is int && data.studyMinutes >= 0 && data.studyMinutes <= 100000 &&
+        isOptionalString(data, 'notes', 4000);
+    }
+
+    function isValidClassSchedule(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.className is string && data.className.size() >= 1 && data.className.size() <= 140 &&
+        data.dayOfWeek is int && data.dayOfWeek >= 1 && data.dayOfWeek <= 7 &&
+        data.startTime is string && data.startTime.size() <= 16 &&
+        data.endTime is string && data.endTime.size() <= 16 &&
+        data.reminderEnabled is bool &&
+        isOptionalString(data, 'subject', 100) &&
+        isOptionalString(data, 'instructor', 100) &&
+        isOptionalString(data, 'locationOrLink', 300);
+    }
+
+    function isValidJobApplication(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.company is string && data.company.size() >= 1 && data.company.size() <= 120 &&
+        data.role is string && data.role.size() >= 1 && data.role.size() <= 120 &&
+        data.jobType is string && data.jobType.size() <= 40 &&
+        data.appliedDateIso is string && data.appliedDateIso.size() <= 10 &&
+        data.status in ['APPLIED', 'INTERVIEW_SCHEDULED', 'IN_PROGRESS', 'OFFER', 'REJECTED', 'WITHDRAWN'] &&
+        isOptionalString(data, 'applicationLink', 400) &&
+        isOptionalString(data, 'interviewDateIso', 10) &&
+        isOptionalString(data, 'interviewTime', 20) &&
+        isOptionalString(data, 'interviewType', 60) &&
+        isOptionalString(data, 'meetingLink', 400) &&
+        isOptionalString(data, 'location', 160) &&
+        isOptionalString(data, 'contactInfo', 160) &&
+        isOptionalString(data, 'prepNotes', 3000) &&
+        isOptionalString(data, 'prepChecklistCsv', 2000) &&
+        isOptionalString(data, 'completedChecklistCsv', 2000);
+    }
+
+    function isValidSavedMedia(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.kind in ['NEWS', 'VIDEO', 'QUOTE'] &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 240 &&
+        data.watchedOrRead is bool &&
+        isOptionalString(data, 'subtitleOrAuthor', 160) &&
+        isOptionalString(data, 'url', 500) &&
+        isOptionalString(data, 'category', 60);
+    }
+
+    function isValidMemory(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.memoryDateIso is string && data.memoryDateIso.size() == 10 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+        data.favorite is bool &&
+        isOptionalString(data, 'description', 4000) &&
+        isOptionalString(data, 'memoryTimeText', 20) &&
+        isOptionalString(data, 'tagsCsv', 300);
+    }
+
+    function isValidNotificationPrefs(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+        data.pauseAll is bool &&
+        data.waterEnabled is bool &&
+        data.stepsEnabled is bool &&
+        data.goalsEnabled is bool &&
+        data.tasksEnabled is bool &&
+        data.habitsEnabled is bool &&
+        data.techNewsEnabled is bool &&
+        data.youtubeVideosEnabled is bool &&
+        data.learningEnabled is bool &&
+        data.classesEnabled is bool &&
+        data.interviewsEnabled is bool &&
+        data.financeEnabled is bool &&
+        data.motivationEnabled is bool &&
+        data.dailySummaryEnabled is bool &&
+        data.waterIntervalMinutes is int && data.waterIntervalMinutes >= 30 && data.waterIntervalMinutes <= 240 &&
+        data.dailySummaryHour is int && data.dailySummaryHour >= 0 && data.dailySummaryHour <= 23 &&
+        data.dailySummaryMinute is int && data.dailySummaryMinute >= 0 && data.dailySummaryMinute <= 59 &&
+        data.quietHoursEnabled is bool &&
+        data.quietStartHour is int && data.quietStartHour >= 0 && data.quietStartHour <= 23 &&
+        data.quietEndHour is int && data.quietEndHour >= 0 && data.quietEndHour <= 23 &&
+        data.soundEnabled is bool &&
+        data.vibrationEnabled is bool;
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow create: if isOwner(userId) && isValidId(userId) &&
+        incoming().userId == userId &&
+        incoming().keys().hasAll(['userId', 'displayName', 'timezone', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly([
+          'userId', 'displayName', 'email', 'timezone', 'username', 'bio',
+          'initialBalance', 'monthlyBudget', 'dailySpendLimit',
+          'proteinTargetG', 'calorieTargetKcal', 'streakFreezesAvailable',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidTimestamp(incoming().createdAt) &&
+        isValidTimestamp(incoming().updatedAt) &&
+        isValidUserProfile(incoming());
+      allow update: if isOwner(userId) && isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        isValidTimestamp(incoming().updatedAt) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName', 'email', 'timezone', 'username', 'bio',
+          'initialBalance', 'monthlyBudget', 'dailySpendLimit',
+          'proteinTargetG', 'calorieTargetKcal', 'streakFreezesAvailable',
+          'updatedAt'
+        ]);
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /userPreferences/{prefId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(prefId);
+        allow create: if isOwner(userId) && isValidId(prefId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll([
+            'userId', 'enabledWidgets', 'themeMode',
+            'weightTasks', 'weightHabits', 'weightChallenges', 'weightWater', 'weightSteps',
+            'waterTargetMl', 'stepsTarget', 'focusTargetMinutes', 'createdAt', 'updatedAt'
+          ]) &&
+          incoming().keys().hasOnly([
+            'userId', 'enabledWidgets', 'themeMode',
+            'weightTasks', 'weightHabits', 'weightChallenges', 'weightWater', 'weightSteps',
+            'waterTargetMl', 'stepsTarget', 'focusTargetMinutes', 'quietHoursStart', 'quietHoursEnd',
+            'createdAt', 'updatedAt'
+          ]) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidUserPreferences(incoming());
+        allow update: if isOwner(userId) && isValidId(prefId) &&
+          isValidUserPreferences(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'enabledWidgets', 'themeMode',
+            'weightTasks', 'weightHabits', 'weightChallenges', 'weightWater', 'weightSteps',
+            'waterTargetMl', 'stepsTarget', 'focusTargetMinutes', 'quietHoursStart', 'quietHoursEnd',
+            'updatedAt'
+          ]);
+      }
+
+      match /tasks/{taskId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(taskId);
+        allow create: if isOwner(userId) && isValidId(taskId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'title', 'priority', 'status', 'dueDateIso', 'category', 'recurrence', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly([
+            'userId', 'title', 'description', 'priority', 'status', 'dueDateIso', 'dueTimeText',
+            'category', 'labelsCsv', 'recurrence', 'timeBlockStart', 'timeBlockEnd', 'completedDateIso',
+            'createdAt', 'updatedAt'
+          ]) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidTask(incoming());
+        allow update: if isOwner(userId) && isValidId(taskId) &&
+          isValidTask(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'description', 'priority', 'status', 'dueDateIso', 'dueTimeText',
+            'category', 'labelsCsv', 'recurrence', 'timeBlockStart', 'timeBlockEnd', 'completedDateIso',
+            'updatedAt'
+          ]);
+      }
+
+      match /habits/{habitId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(habitId);
+        allow create: if isOwner(userId) && isValidId(habitId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'title', 'scheduleType', 'weekdaysMask', 'startDateIso', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly([
+            'userId', 'title', 'scheduleType', 'weekdaysMask', 'startDateIso', 'endDateIso',
+            'reminderTime', 'targetValue', 'unit', 'autoSource', 'createdAt', 'updatedAt'
+          ]) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidHabit(incoming());
+        allow update: if isOwner(userId) && isValidId(habitId) &&
+          isValidHabit(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'scheduleType', 'weekdaysMask', 'startDateIso', 'endDateIso',
+            'reminderTime', 'targetValue', 'unit', 'autoSource', 'updatedAt'
+          ]);
+      }
+
+      match /habitLogs/{logId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(logId);
+        allow create: if isOwner(userId) && isValidId(logId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'habitId', 'dateIso', 'completed', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'habitId', 'dateIso', 'completed', 'progressValue', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidHabitLog(incoming());
+        allow update: if isOwner(userId) && isValidId(logId) &&
+          isValidHabitLog(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['completed', 'progressValue', 'updatedAt']);
+      }
+
+      match /challenges/{challengeId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(challengeId);
+        allow create: if isOwner(userId) && isValidId(challengeId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'title', 'startDateIso', 'endDateIso', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'title', 'description', 'startDateIso', 'endDateIso', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidChallenge(incoming());
+        allow update: if isOwner(userId) && isValidId(challengeId) &&
+          isValidChallenge(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'startDateIso', 'endDateIso', 'updatedAt']);
+      }
+
+      match /challengeLogs/{logId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(logId);
+        allow create: if isOwner(userId) && isValidId(logId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'challengeId', 'dateIso', 'status', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'challengeId', 'dateIso', 'status', 'auditHistory', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidChallengeLog(incoming());
+        allow update: if isOwner(userId) && isValidId(logId) &&
+          isValidChallengeLog(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'auditHistory', 'updatedAt']);
+      }
+
+      match /notes/{noteId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(noteId);
+        allow create: if isOwner(userId) && isValidId(noteId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'title', 'content', 'pinned', 'archived', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly([
+            'userId', 'title', 'content', 'labelsCsv', 'folder', 'pinned', 'favorite',
+            'isCodeNote', 'archived', 'attachmentUri', 'createdAt', 'updatedAt'
+          ]) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidNote(incoming());
+        allow update: if isOwner(userId) && isValidId(noteId) &&
+          isValidNote(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'content', 'labelsCsv', 'folder', 'pinned', 'favorite',
+            'isCodeNote', 'archived', 'attachmentUri', 'updatedAt'
+          ]);
+      }
+
+      match /routines/{routineId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(routineId);
+        allow create: if isOwner(userId) && isValidId(routineId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'title', 'routineType', 'stepsCsv', 'recurrence', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'title', 'routineType', 'stepsCsv', 'recurrence', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidRoutine(incoming());
+        allow update: if isOwner(userId) && isValidId(routineId) &&
+          isValidRoutine(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'routineType', 'stepsCsv', 'recurrence', 'updatedAt']);
+      }
+
+      match /routineLogs/{logId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(logId);
+        allow create: if isOwner(userId) && isValidId(logId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'routineId', 'dateIso', 'completedStepsCsv', 'completedAll', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'routineId', 'dateIso', 'completedStepsCsv', 'completedAll', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidRoutineLog(incoming());
+        allow update: if isOwner(userId) && isValidId(logId) &&
+          isValidRoutineLog(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['completedStepsCsv', 'completedAll', 'updatedAt']);
+      }
+
+      match /goals/{goalId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(goalId);
+        allow create: if isOwner(userId) && isValidId(goalId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'title', 'horizon', 'priority', 'status', 'targetDateIso', 'progressPercent', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly([
+            'userId', 'title', 'description', 'horizon', 'priority', 'status',
+            'targetDateIso', 'progressPercent', 'milestonesCsv', 'completedMilestonesCsv',
+            'createdAt', 'updatedAt'
+          ]) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidGoal(incoming());
+        allow update: if isOwner(userId) && isValidId(goalId) &&
+          isValidGoal(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'description', 'horizon', 'priority', 'status',
+            'targetDateIso', 'progressPercent', 'milestonesCsv', 'completedMilestonesCsv',
+            'updatedAt'
+          ]);
+      }
+
+      match /journalEntries/{entryId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(entryId);
+        allow create: if isOwner(userId) && isValidId(entryId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'dateIso', 'privateEntry', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly([
+            'userId', 'dateIso', 'highlights', 'learned', 'wentWell', 'wentWrong',
+            'tomorrowPlan', 'gratitude', 'mood', 'privateEntry', 'createdAt', 'updatedAt'
+          ]) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidJournalEntry(incoming());
+        allow update: if isOwner(userId) && isValidId(entryId) &&
+          isValidJournalEntry(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'highlights', 'learned', 'wentWell', 'wentWrong', 'tomorrowPlan',
+            'gratitude', 'mood', 'privateEntry', 'updatedAt'
+          ]);
+      }
+
+      match /focusSessions/{sessionId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(sessionId);
+        allow create: if isOwner(userId) && isValidId(sessionId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'dateIso', 'mode', 'category', 'plannedMinutes', 'actualSeconds', 'distractionsCount', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'dateIso', 'mode', 'category', 'plannedMinutes', 'actualSeconds', 'distractionsCount', 'notes', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidFocusSession(incoming());
+        allow update: if isOwner(userId) && isValidId(sessionId) &&
+          isValidFocusSession(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['notes', 'distractionsCount', 'actualSeconds', 'updatedAt']);
+      }
+
+      match /waterLogs/{logId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(logId);
+        allow create: if isOwner(userId) && isValidId(logId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'dateIso', 'amountMl', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'dateIso', 'amountMl', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidWaterLog(incoming());
+        allow update: if isOwner(userId) && isValidId(logId) &&
+          isValidWaterLog(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['amountMl', 'updatedAt']);
+      }
+
+      match /stepLogs/{logId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(logId);
+        allow create: if isOwner(userId) && isValidId(logId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'dateIso', 'steps', 'source', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'dateIso', 'steps', 'source', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidStepLog(incoming());
+        allow update: if isOwner(userId) && isValidId(logId) &&
+          isValidStepLog(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['steps', 'source', 'updatedAt']);
+      }
+
+      match /reminders/{reminderId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(reminderId);
+        allow create: if isOwner(userId) && isValidId(reminderId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'title', 'moduleType', 'scheduledEpochMs', 'recurrence', 'enabled', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'title', 'moduleType', 'scheduledEpochMs', 'recurrence', 'enabled', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidReminder(incoming());
+        allow update: if isOwner(userId) && isValidId(reminderId) &&
+          isValidReminder(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'moduleType', 'scheduledEpochMs', 'recurrence', 'enabled', 'updatedAt']);
+      }
+
+      match /transactions/{txId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(txId);
+        allow create: if isOwner(userId) && isValidId(txId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'type', 'amount', 'category', 'dateIso', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'type', 'amount', 'category', 'note', 'dateIso', 'locationTag', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidTransaction(incoming());
+        allow update: if isOwner(userId) && isValidId(txId) &&
+          isValidTransaction(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['type', 'amount', 'category', 'note', 'dateIso', 'locationTag', 'updatedAt']);
+      }
+
+      match /savingsGoals/{goalId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(goalId);
+        allow create: if isOwner(userId) && isValidId(goalId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'title', 'targetAmount', 'savedAmount', 'targetDateIso', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'title', 'targetAmount', 'savedAmount', 'targetDateIso', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidSavingsGoal(incoming());
+        allow update: if isOwner(userId) && isValidId(goalId) &&
+          isValidSavingsGoal(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'targetAmount', 'savedAmount', 'targetDateIso', 'updatedAt']);
+      }
+
+      match /nutritionEntries/{entryId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(entryId);
+        allow create: if isOwner(userId) && isValidId(entryId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'dateIso', 'mealType', 'foodName', 'quantityLabel', 'proteinG', 'calories', 'carbsG', 'fatG', 'isEstimated', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'dateIso', 'mealType', 'foodName', 'quantityLabel', 'proteinG', 'calories', 'carbsG', 'fatG', 'isEstimated', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidNutritionEntry(incoming());
+        allow update: if isOwner(userId) && isValidId(entryId) &&
+          isValidNutritionEntry(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['dateIso', 'mealType', 'foodName', 'quantityLabel', 'proteinG', 'calories', 'carbsG', 'fatG', 'isEstimated', 'updatedAt']);
+      }
+
+      match /learningTopics/{topicId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(topicId);
+        allow create: if isOwner(userId) && isValidId(topicId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'category', 'level', 'title', 'completed', 'saved', 'studyMinutes', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'category', 'level', 'title', 'completed', 'saved', 'studyMinutes', 'notes', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidLearningTopic(incoming());
+        allow update: if isOwner(userId) && isValidId(topicId) &&
+          isValidLearningTopic(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['category', 'level', 'title', 'completed', 'saved', 'studyMinutes', 'notes', 'updatedAt']);
+      }
+
+      match /classSchedules/{scheduleId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(scheduleId);
+        allow create: if isOwner(userId) && isValidId(scheduleId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'className', 'dayOfWeek', 'startTime', 'endTime', 'reminderEnabled', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'className', 'subject', 'instructor', 'dayOfWeek', 'startTime', 'endTime', 'locationOrLink', 'reminderEnabled', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidClassSchedule(incoming());
+        allow update: if isOwner(userId) && isValidId(scheduleId) &&
+          isValidClassSchedule(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['className', 'subject', 'instructor', 'dayOfWeek', 'startTime', 'endTime', 'locationOrLink', 'reminderEnabled', 'updatedAt']);
+      }
+
+      match /jobApplications/{appId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(appId);
+        allow create: if isOwner(userId) && isValidId(appId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'company', 'role', 'jobType', 'appliedDateIso', 'status', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly([
+            'userId', 'company', 'role', 'jobType', 'appliedDateIso', 'applicationLink',
+            'status', 'interviewDateIso', 'interviewTime', 'interviewType', 'meetingLink',
+            'location', 'contactInfo', 'prepNotes', 'prepChecklistCsv', 'completedChecklistCsv',
+            'createdAt', 'updatedAt'
+          ]) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidJobApplication(incoming());
+        allow update: if isOwner(userId) && isValidId(appId) &&
+          isValidJobApplication(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'company', 'role', 'jobType', 'appliedDateIso', 'applicationLink',
+            'status', 'interviewDateIso', 'interviewTime', 'interviewType', 'meetingLink',
+            'location', 'contactInfo', 'prepNotes', 'prepChecklistCsv', 'completedChecklistCsv',
+            'updatedAt'
+          ]);
+      }
+
+      match /savedMedia/{mediaId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(mediaId);
+        allow create: if isOwner(userId) && isValidId(mediaId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'kind', 'title', 'watchedOrRead', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'kind', 'title', 'subtitleOrAuthor', 'url', 'category', 'watchedOrRead', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidSavedMedia(incoming());
+        allow update: if isOwner(userId) && isValidId(mediaId) &&
+          isValidSavedMedia(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['kind', 'title', 'subtitleOrAuthor', 'url', 'category', 'watchedOrRead', 'updatedAt']);
+      }
+
+      match /memories/{memoryId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(memoryId);
+        allow create: if isOwner(userId) && isValidId(memoryId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll(['userId', 'title', 'memoryDateIso', 'category', 'favorite', 'createdAt', 'updatedAt']) &&
+          incoming().keys().hasOnly(['userId', 'title', 'description', 'memoryDateIso', 'memoryTimeText', 'category', 'tagsCsv', 'favorite', 'createdAt', 'updatedAt']) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidMemory(incoming());
+        allow update: if isOwner(userId) && isValidId(memoryId) &&
+          isValidMemory(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'memoryDateIso', 'memoryTimeText', 'category', 'tagsCsv', 'favorite', 'updatedAt']);
+      }
+
+      match /notificationPrefs/{prefId} {
+        allow list: if isOwner(userId);
+        allow get, delete: if isOwner(userId) && isValidId(prefId);
+        allow create: if isOwner(userId) && isValidId(prefId) &&
+          incoming().userId == userId &&
+          incoming().keys().hasAll([
+            'userId', 'pauseAll', 'waterEnabled', 'stepsEnabled', 'goalsEnabled', 'tasksEnabled',
+            'habitsEnabled', 'techNewsEnabled', 'youtubeVideosEnabled', 'learningEnabled',
+            'classesEnabled', 'interviewsEnabled', 'financeEnabled', 'motivationEnabled',
+            'dailySummaryEnabled', 'waterIntervalMinutes', 'dailySummaryHour', 'dailySummaryMinute',
+            'quietHoursEnabled', 'quietStartHour', 'quietEndHour', 'soundEnabled', 'vibrationEnabled',
+            'createdAt', 'updatedAt'
+          ]) &&
+          incoming().keys().hasOnly([
+            'userId', 'pauseAll', 'waterEnabled', 'stepsEnabled', 'goalsEnabled', 'tasksEnabled',
+            'habitsEnabled', 'techNewsEnabled', 'youtubeVideosEnabled', 'learningEnabled',
+            'classesEnabled', 'interviewsEnabled', 'financeEnabled', 'motivationEnabled',
+            'dailySummaryEnabled', 'waterIntervalMinutes', 'dailySummaryHour', 'dailySummaryMinute',
+            'quietHoursEnabled', 'quietStartHour', 'quietEndHour', 'soundEnabled', 'vibrationEnabled',
+            'createdAt', 'updatedAt'
+          ]) &&
+          isValidTimestamp(incoming().createdAt) &&
+          isValidTimestamp(incoming().updatedAt) &&
+          isValidNotificationPrefs(incoming());
+        allow update: if isOwner(userId) && isValidId(prefId) &&
+          isValidNotificationPrefs(incoming()) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          isValidTimestamp(incoming().updatedAt) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'pauseAll', 'waterEnabled', 'stepsEnabled', 'goalsEnabled', 'tasksEnabled',
+            'habitsEnabled', 'techNewsEnabled', 'youtubeVideosEnabled', 'learningEnabled',
+            'classesEnabled', 'interviewsEnabled', 'financeEnabled', 'motivationEnabled',
+            'dailySummaryEnabled', 'waterIntervalMinutes', 'dailySummaryHour', 'dailySummaryMinute',
+            'quietHoursEnabled', 'quietStartHour', 'quietEndHour', 'soundEnabled', 'vibrationEnabled',
+            'updatedAt'
+          ]);
+      }
+    }
+  }
+}
